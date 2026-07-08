@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weather Dashboard | Anas Khan</title>
+  <meta name="description" content="A real-time weather dashboard built with the Fetch API and async/await, by Anas Khan.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --color-bg: #0F1626;
+      --color-bg-soft: #161F35;
+      --color-gold: #C9A24B;
+      --color-text: #EDE7DA;
+      --color-text-muted: #A8AEC0;
+      --color-error: #D97D75;
+      --font-display: 'Cormorant Garamond', serif;
+      --font-body: 'Inter', sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      background: var(--color-bg); color: var(--color-text);
+      font-family: var(--font-body); line-height: 1.5;
+      display: flex; justify-content: center; padding: 2em 1em;
+    }
+    main { width: 100%; max-width: 480px; }
+    h1 { font-family: var(--font-display); text-align: center; margin-bottom: 0.2em; }
+    p.subtitle { text-align: center; color: var(--color-text-muted); margin-top: 0; font-size: 0.9em; }
+
+    form#search-form { display: flex; gap: 0.5em; margin: 1.5em 0; }
+    #city-input {
+      flex: 1; padding: 0.7em; border-radius: 6px; border: 1px solid rgba(201,162,75,0.3);
+      background: var(--color-bg-soft); color: var(--color-text); font-family: var(--font-body); font-size: 1em;
+    }
+    #search-form button {
+      background: var(--color-gold); color: #0F1626; border: none;
+      padding: 0.7em 1.2em; border-radius: 6px; font-weight: 600; cursor: pointer;
+    }
+    #city-input:focus, #search-form button:focus { outline: 3px solid var(--color-gold); outline-offset: 2px; }
+
+    #status { text-align: center; color: var(--color-text-muted); min-height: 1.5em; margin-bottom: 1em; }
+    #status[data-state="error"] { color: var(--color-error); }
+
+    .weather-card {
+      background: var(--color-bg-soft); border: 1px solid rgba(201,162,75,0.2);
+      border-radius: 10px; padding: 1.5em; text-align: center;
+    }
+    .weather-card h2 { font-family: var(--font-display); margin: 0 0 0.1em; font-size: 1.5em; }
+    .weather-card .condition { color: var(--color-text-muted); margin-bottom: 1em; }
+    .temp-big { font-size: 3em; font-family: var(--font-display); margin: 0.2em 0; }
+    .metrics {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75em; margin-top: 1.25em;
+    }
+    .metric {
+      background: rgba(201,162,75,0.08); border-radius: 8px; padding: 0.75em 0.5em;
+    }
+    .metric .label { font-size: 0.75em; color: var(--color-text-muted); display: block; }
+    .metric .value { font-size: 1.1em; font-weight: 600; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Weather Dashboard</h1>
+    <p class="subtitle">Search any city for live weather data.</p>
+
+    <form id="search-form" aria-label="Search weather by city">
+      <label for="city-input" class="visually-hidden">City name</label>
+      <input type="text" id="city-input" placeholder="Enter city name (e.g. Bhopal)" autocomplete="off" required>
+      <button type="submit">Search</button>
+    </form>
+
+    <p id="status" role="status" aria-live="polite"></p>
+
+    <section class="weather-card" id="weather-card" hidden aria-live="polite">
+      <h2 id="city-name"></h2>
+      <p class="condition" id="condition"></p>
+      <p class="temp-big" id="temp"></p>
+      <div class="metrics">
+        <div class="metric">
+          <span class="label">Feels like</span>
+          <span class="value" id="feels-like"></span>
+        </div>
+        <div class="metric">
+          <span class="label">Humidity</span>
+          <span class="value" id="humidity"></span>
+        </div>
+        <div class="metric">
+          <span class="label">Wind</span>
+          <span class="value" id="wind"></span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById('search-form');
+    const input = document.getElementById('city-input');
+    const statusEl = document.getElementById('status');
+    const card = document.getElementById('weather-card');
+
+    const WEATHER_CODES = {
+      0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+      45: 'Fog', 48: 'Depositing rime fog',
+      51: 'Light drizzle', 53: 'Moderate drizzle', 55: 'Dense drizzle',
+      61: 'Slight rain', 63: 'Moderate rain', 65: 'Heavy rain',
+      71: 'Slight snow', 73: 'Moderate snow', 75: 'Heavy snow',
+      80: 'Rain showers', 81: 'Moderate showers', 82: 'Violent showers',
+      95: 'Thunderstorm', 96: 'Thunderstorm with hail'
+    };
+
+    function setStatus(message, state) {
+      statusEl.textContent = message;
+      statusEl.dataset.state = state || '';
+    }
+
+    async function getCoordinates(city) {
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Location lookup failed. Please try again.');
+      const data = await response.json();
+      if (!data.results || data.results.length === 0) {
+        throw new Error(`No city found matching "${city}". Check the spelling and try again.`);
+      }
+      const { latitude, longitude, name, country } = data.results[0];
+      return { latitude, longitude, name, country };
+    }
+
+    async function getWeather(latitude, longitude) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Weather data request failed. Please try again.');
+      const data = await response.json();
+      if (!data.current) throw new Error('Weather data unavailable for this location.');
+      return data.current;
+    }
+
+    function renderWeather(place, current) {
+      document.getElementById('city-name').textContent = `${place.name}, ${place.country}`;
+      document.getElementById('condition').textContent = WEATHER_CODES[current.weather_code] || 'Unknown conditions';
+      document.getElementById('temp').textContent = `${Math.round(current.temperature_2m)}°C`;
+      document.getElementById('feels-like').textContent = `${Math.round(current.apparent_temperature)}°C`;
+      document.getElementById('humidity').textContent = `${current.relative_humidity_2m}%`;
+      document.getElementById('wind').textContent = `${Math.round(current.wind_speed_10m)} km/h`;
+      card.hidden = false;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const city = input.value.trim();
+      if (!city) return;
+
+      card.hidden = true;
+      setStatus('Searching...', '');
+
+      try {
+        const place = await getCoordinates(city);
+        setStatus('Loading weather...', '');
+        const current = await getWeather(place.latitude, place.longitude);
+        renderWeather(place, current);
+        setStatus('', '');
+      } catch (err) {
+        setStatus(err.message || 'Something went wrong. Please try again.', 'error');
+      }
+    });
+  </script>
+</body>
+</html>
