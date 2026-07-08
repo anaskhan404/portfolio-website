@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud Services Catalog | Anas Khan</title>
+  <meta name="description" content="A capstone web app cataloguing Azure cloud services, with client-side routing and a shortlist cart, built by Anas Khan.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --color-bg: #0F1626;
+      --color-bg-soft: #161F35;
+      --color-gold: #C9A24B;
+      --color-text: #EDE7DA;
+      --color-text-muted: #A8AEC0;
+      --font-display: 'Cormorant Garamond', serif;
+      --font-body: 'Inter', sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--color-bg); color: var(--color-text);
+      font-family: var(--font-body); line-height: 1.5;
+    }
+    header {
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75em;
+      padding: 1em 1.25em; border-bottom: 1px solid rgba(201,162,75,0.25);
+    }
+    header .brand { font-family: var(--font-display); font-size: 1.3em; }
+    nav ul { list-style: none; display: flex; gap: 1.25em; margin: 0; padding: 0; }
+    nav a {
+      text-decoration: none; color: var(--color-text-muted); font-size: 0.9em; cursor: pointer;
+      padding-bottom: 2px;
+    }
+    nav a.active { color: var(--color-gold); border-bottom: 2px solid var(--color-gold); }
+    a:focus, button:focus, input:focus { outline: 3px solid var(--color-gold); outline-offset: 2px; }
+
+    main { max-width: 960px; margin: 0 auto; padding: 2em 1.25em; }
+    h1 { font-family: var(--font-display); margin-top: 0; }
+    .lead { color: var(--color-text-muted); max-width: 55ch; }
+
+    .catalog-grid {
+      display: grid; grid-template-columns: 1fr; gap: 1em; margin-top: 1.5em;
+    }
+    @media (min-width: 600px) { .catalog-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 900px) { .catalog-grid { grid-template-columns: repeat(3, 1fr); } }
+
+    .service-card {
+      background: var(--color-bg-soft); border: 1px solid rgba(201,162,75,0.2);
+      border-radius: 10px; padding: 1.25em; display: flex; flex-direction: column; gap: 0.5em;
+    }
+    .service-card .category { font-size: 0.75em; color: var(--color-gold); text-transform: uppercase; letter-spacing: 0.05em; }
+    .service-card h3 { margin: 0; font-family: var(--font-display); font-size: 1.25em; }
+    .service-card p { color: var(--color-text-muted); font-size: 0.9em; margin: 0; flex: 1; }
+    .service-card button {
+      align-self: flex-start; background: transparent; border: 1px solid var(--color-gold);
+      color: var(--color-gold); padding: 0.5em 1em; border-radius: 6px; cursor: pointer; font-size: 0.85em;
+    }
+    .service-card button.added { background: var(--color-gold); color: #0F1626; }
+
+    .shortlist-item {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--color-bg-soft); border: 1px solid rgba(201,162,75,0.2);
+      border-radius: 8px; padding: 0.9em 1.1em; margin-bottom: 0.6em;
+    }
+    .shortlist-item button {
+      background: transparent; border: none; color: var(--color-text-muted); cursor: pointer; font-size: 1.1em;
+    }
+    .empty-state { color: var(--color-text-muted); margin-top: 1.5em; }
+    [hidden] { display: none !important; }
+    footer { text-align: center; padding: 2em; color: var(--color-text-muted); font-size: 0.85em; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="brand">Cloud Services Catalog</span>
+    <nav aria-label="Primary navigation">
+      <ul>
+        <li><a data-route="home" href="#home">Home</a></li>
+        <li><a data-route="catalog" href="#catalog">Catalog</a></li>
+        <li><a data-route="shortlist" href="#shortlist">Shortlist (<span id="cart-count">0</span>)</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="app" aria-live="polite"></main>
+
+  <footer>
+    <p>&copy; 2026 Anas Khan &mdash; Capstone Project: modular frontend, client-side routing, live deployment.</p>
+  </footer>
+
+  <script>
+    const SERVICES = [
+      { id: 'vm', category: 'Compute', name: 'Virtual Machines', desc: 'On-demand, scalable Windows or Linux compute instances.' },
+      { id: 'blob', category: 'Storage', name: 'Blob Storage', desc: 'Massively scalable object storage for unstructured data.' },
+      { id: 'sql', category: 'Database', name: 'Azure SQL Database', desc: 'Fully managed, intelligent relational database service.' },
+      { id: 'aks', category: 'Containers', name: 'Azure Kubernetes Service', desc: 'Simplified container orchestration at scale.' },
+      { id: 'ad', category: 'Identity', name: 'Azure Active Directory', desc: 'Cloud-based identity and access management.' },
+      { id: 'monitor', category: 'Monitoring', name: 'Azure Monitor', desc: 'Full observability into apps, infrastructure, and network.' },
+      { id: 'func', category: 'Compute', name: 'Azure Functions', desc: 'Event-driven, serverless compute for lightweight APIs.' },
+      { id: 'vnet', category: 'Networking', name: 'Virtual Network', desc: 'Private, isolated network foundation for Azure resources.' },
+      { id: 'backup', category: 'Management', name: 'Azure Backup', desc: 'Simple, reliable backup-as-a-service for cloud and on-prem.' },
+    ];
+
+    const STORAGE_KEY = 'anas-cloud-shortlist';
+    let shortlist = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+
+    const app = document.getElementById('app');
+    const cartCountEl = document.getElementById('cart-count');
+    const navLinks = document.querySelectorAll('nav a');
+
+    function saveShortlist() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(shortlist));
+      cartCountEl.textContent = shortlist.length;
+    }
+
+    function toggleShortlist(id) {
+      shortlist = shortlist.includes(id)
+        ? shortlist.filter(s => s !== id)
+        : [...shortlist, id];
+      saveShortlist();
+      render();
+    }
+
+    function renderHome() {
+      return `
+        <h1>Explore Azure Cloud Services</h1>
+        <p class="lead">A capstone project combining semantic HTML, responsive CSS, and
+        stateful JavaScript &mdash; browse core Azure services and build a personal shortlist.</p>
+        <p><a data-route="catalog" href="#catalog" style="color:var(--color-gold);">Browse the full catalog &rarr;</a></p>
+      `;
+    }
+
+    function renderCatalog() {
+      const cards = SERVICES.map(s => `
+        <article class="service-card">
+          <span class="category">${s.category}</span>
+          <h3>${s.name}</h3>
+          <p>${s.desc}</p>
+          <button data-id="${s.id}" class="${shortlist.includes(s.id) ? 'added' : ''}">
+            ${shortlist.includes(s.id) ? '✓ Shortlisted' : '+ Add to shortlist'}
+          </button>
+        </article>
+      `).join('');
+      return `
+        <h1>Service Catalog</h1>
+        <p class="lead">Tap "Add to shortlist" on any service you'd like to revisit later.</p>
+        <div class="catalog-grid">${cards}</div>
+      `;
+    }
+
+    function renderShortlist() {
+      if (shortlist.length === 0) {
+        return `<h1>Your Shortlist</h1><p class="empty-state">Nothing shortlisted yet. Browse the catalog and add a few services.</p>`;
+      }
+      const items = shortlist.map(id => {
+        const s = SERVICES.find(x => x.id === id);
+        return `
+          <div class="shortlist-item">
+            <span>${s.name} <span style="color:var(--color-text-muted); font-size:0.85em;">(${s.category})</span></span>
+            <button data-id="${s.id}" aria-label="Remove ${s.name} from shortlist">✕</button>
+          </div>
+        `;
+      }).join('');
+      return `<h1>Your Shortlist</h1>${items}`;
+    }
+
+    function render() {
+      const route = (location.hash.replace('#', '') || 'home');
+      navLinks.forEach(a => a.classList.toggle('active', a.dataset.route === route));
+
+      if (route === 'catalog') app.innerHTML = renderCatalog();
+      else if (route === 'shortlist') app.innerHTML = renderShortlist();
+      else app.innerHTML = renderHome();
+
+      // Event delegation for add/remove buttons
+      app.querySelectorAll('button[data-id]').forEach(btn => {
+        btn.addEventListener('click', () => toggleShortlist(btn.dataset.id));
+      });
+
+      cartCountEl.textContent = shortlist.length;
+    }
+
+    window.addEventListener('hashchange', render);
+    window.addEventListener('DOMContentLoaded', render);
+    saveShortlist();
+  </script>
+</body>
+</html>
